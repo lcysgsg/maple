@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>挂机经验收益模拟器</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #f9f9f9;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    label, input {
+      display: block;
+      margin-bottom: 1rem;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 0.5rem;
+    }
+    .result {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #e0f7fa;
+      border-left: 5px solid #00796b;
+    }
+  </style>
+</head>
+<body>
+  <h1>挂机经验收益模拟器</h1>
+  <label>
+    个人基础经验加成 (%)：
+    <input type="number" id="pBase" value="60">
+  </label>
+  <label>
+    超级技能个人经验加成 (%)：
+    <input type="number" id="superPersonal" value="13.5">
+  </label>
+  <label>
+    超级技能组队经验加成 (%)：
+    <input type="number" id="superGroup" value="25">
+  </label>
+  <label>
+    替代方案超级技能个人经验加成 (%)：
+    <input type="number" id="altSuperPersonal" value="30">
+  </label>
+  <label>
+    替代方案超级技能组队经验加成 (%)：
+    <input type="number" id="altSuperGroup" value="13.5">
+  </label>
+
+  <h3>击杀占比模拟（共300怪，按击杀数输入）</h3>
+  <label>
+    玩家击杀数量（示例：80,50,50,60,40,20）：
+    <input type="text" id="kills" value="80,50,50,60,40,20">
+  </label>
+
+  <div class="result" id="output"></div>
+
+  <script>
+    const inputs = document.querySelectorAll('input');
+    inputs.forEach(input => input.addEventListener('input', calculate));
+
+    function calculate() {
+      const pBase = parseFloat(document.getElementById('pBase').value) / 100;
+      const superPersonal = parseFloat(document.getElementById('superPersonal').value) / 100;
+      const superGroup = parseFloat(document.getElementById('superGroup').value) / 100;
+      const altSuperPersonal = parseFloat(document.getElementById('altSuperPersonal').value) / 100;
+      const altSuperGroup = parseFloat(document.getElementById('altSuperGroup').value) / 100;
+      const kills = document.getElementById('kills').value.split(',').map(k => parseInt(k.trim())).filter(k => !isNaN(k));
+
+      const totalKills = kills.reduce((a, b) => a + b, 0);
+      const teamSize = kills.length;
+
+      const getExp = (selfKillRatio, team) => {
+        return selfKillRatio * (1 + pBase + team.personal) * (1 + team.group) +
+               (1 - selfKillRatio) * (1 + pBase + team.personal) * (1 + team.teamAvgGroup);
+      };
+
+      const teamAvgGroupA = superGroup;
+      const teamAvgGroupB = altSuperGroup;
+
+      const result = kills.map(k => {
+        const ratio = k / totalKills;
+        const expA = getExp(ratio, {
+          personal: superPersonal,
+          group: superGroup,
+          teamAvgGroup: teamAvgGroupA
+        });
+        const expB = getExp(ratio, {
+          personal: altSuperPersonal,
+          group: altSuperGroup,
+          teamAvgGroup: teamAvgGroupB
+        });
+        return { k, ratio, expA, expB, better: expA > expB ? '组队' : '个人' };
+      });
+
+      let html = `<strong>当前个人基础经验加成：</strong> ${(pBase * 100).toFixed(2)}%<br><br>`;
+
+      html += `<table border="1" cellpadding="5" style="border-collapse: collapse;">
+        <tr><th>击杀数</th><th>击杀占比</th><th>组队收益</th><th>个人收益</th><th>更优方案</th></tr>`;
+      result.forEach(r => {
+        html += `<tr><td>${r.k}</td><td>${(r.ratio * 100).toFixed(2)}%</td><td>${r.expA.toFixed(4)}</td><td>${r.expB.toFixed(4)}</td><td>${r.better}</td></tr>`;
+      });
+      html += `</table>`;
+
+      document.getElementById('output').innerHTML = html;
+    }
+
+    // 初次执行
+    calculate();
+  </script>
+</body>
+</html>
