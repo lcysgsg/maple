@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>挂机经验加点收益图表</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1000px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #f9f9f9;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    canvas {
+      margin-top: 2rem;
+    }
+    .controls {
+      margin-bottom: 1rem;
+    }
+    .controls label {
+      margin-right: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>挂机经验获取收益图表</h1>
+
+  <div class="controls">
+    <label>
+      玩家击杀数：
+      <input type="number" id="ownKills" value="50" min="0" max="300" step="1">
+    </label>
+    <br>
+    <label>
+      显示个人等级范围：
+      <input type="range" id="personalStart" min="1" max="20" value="1">
+      <input type="range" id="personalEnd" min="1" max="20" value="20">
+    </label>
+    <br>
+    <label>
+      显示组队等级范围：
+      <input type="range" id="groupStart" min="1" max="20" value="1">
+      <input type="range" id="groupEnd" min="1" max="20" value="20">
+    </label>
+  </div>
+
+  <canvas id="chart" width="900" height="500"></canvas>
+
+  <script>
+    const levels = Array.from({length: 20}, (_, i) => i + 1);
+
+    const calcPersonalBonus = (lvl) => {
+      if (lvl <= 5) return lvl * 0.005;
+      if (lvl <= 10) return 5 * 0.005 + (lvl - 5) * 0.01;
+      if (lvl <= 15) return 5 * 0.005 + 5 * 0.01 + (lvl - 10) * 0.015;
+      return 5 * 0.005 + 5 * 0.01 + 5 * 0.015 + (lvl - 15) * 0.03;
+    };
+
+    const calcGroupBonus = (lvl) => {
+      if (lvl <= 5) return lvl * 0.005;
+      if (lvl <= 10) return 5 * 0.005 + (lvl - 5) * 0.01;
+      if (lvl <= 15) return 5 * 0.005 + 5 * 0.01 + (lvl - 10) * 0.015;
+      return 5 * 0.005 + 5 * 0.01 + 5 * 0.015 + (lvl - 15) * 0.02;
+    };
+
+    const basePersonal = 1.0;
+    const baseGroup = 0.15;
+    const monsterExp = 1000000;
+    const teammates = [80, 50, 50, 60, 40, 20];
+
+    const chartCtx = document.getElementById('chart').getContext('2d');
+    let chart;
+
+    const renderChart = (ownKills, personalStart = 1, personalEnd = 20, groupStart = 1, groupEnd = 20) => {
+      const totalKills = teammates.reduce((a, b) => a + b, 0);
+
+      const calcTotalExp = (pLvl, gLvl) => {
+        const pBonus = calcPersonalBonus(pLvl);
+        const gBonus = calcGroupBonus(gLvl);
+
+        let exp = 0;
+        for (let i = 0; i < 6; i++) {
+          const kills = i === 0 ? ownKills : teammates[i];
+          const groupBuff = i === 0 ? gBonus : calcGroupBonus(gLvl);
+          exp += kills * monsterExp * (1 + basePersonal + pBonus) * (1 + groupBuff);
+        }
+        return exp / 1e6; // 百万经验
+      };
+
+      const result = [];
+      for (let p = personalStart; p <= personalEnd; p++) {
+        const row = [];
+        for (let g = groupStart; g <= groupEnd; g++) {
+          row.push(calcTotalExp(p, g));
+        }
+        result.push({ p, row });
+      }
+
+      const datasets = result.map(({ p, row }) => ({
+        label: `个人${p}级`,
+        data: row,
+        borderColor: `hsl(${(p / 20) * 240}, 70%, 50%)`,
+        fill: false,
+        tension: 0.2
+      }));
+
+      if (chart) chart.destroy();
+      chart = new Chart(chartCtx, {
+        type: 'line',
+        data: {
+          labels: Array.from({ length: groupEnd - groupStart + 1 }, (_, i) => `组队${i + groupStart}级`),
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'top' },
+            title: {
+              display: true,
+              text: '个人经验等级 vs 组队等级 的经验获取曲线 (单位：百万)'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: false,
+              title: {
+                display: true,
+                text: '经验获取（百万）'
+              }
+            }
+          }
+        }
+      });
+    };
+
+    document.getElementById('ownKills').addEventListener('input', (e) => {
+      renderChart(parseInt(e.target.value));
+    });
+
+    document.getElementById('personalStart').addEventListener('input', updateChart);
+    document.getElementById('personalEnd').addEventListener('input', updateChart);
+    document.getElementById('groupStart').addEventListener('input', updateChart);
+    document.getElementById('groupEnd').addEventListener('input', updateChart);
+
+    function updateChart() {
+      const ownKills = parseInt(document.getElementById('ownKills').value);
+      const personalStart = parseInt(document.getElementById('personalStart').value);
+      const personalEnd = parseInt(document.getElementById('personalEnd').value);
+      const groupStart = parseInt(document.getElementById('groupStart').value);
+      const groupEnd = parseInt(document.getElementById('groupEnd').value);
+
+      // 保证起始不大于结束
+      if (personalStart <= personalEnd && groupStart <= groupEnd) {
+        renderChart(ownKills, personalStart, personalEnd, groupStart, groupEnd);
+      }
+    }
+
+    // 初始渲染
+    renderChart(parseInt(document.getElementById('ownKills').value));
+  </script>
+</body>
+</html>
